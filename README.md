@@ -4,6 +4,15 @@ A simple command-line tool to download websites for offline use with multiple ou
 
 ## Installation
 
+### Using Homebrew (macOS/Linux)
+
+```
+brew tap nvk/webdownloader
+brew install webdownloader
+```
+
+### Manual Installation
+
 1. Clone this repository:
    ```
    git clone https://github.com/nvk/webdownloader.git
@@ -21,6 +30,12 @@ A simple command-line tool to download websites for offline use with multiple ou
    ```
    chmod +x webdownloader.py
    ```
+
+### Using pip
+
+```
+pip install git+https://github.com/nvk/webdownloader.git
+```
 
 ## Usage
 
