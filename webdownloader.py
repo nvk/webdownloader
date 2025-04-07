@@ -168,7 +168,7 @@ def html_to_markdown(html_content, base_url, img_dir=None):
     
     return markdown
 
-def download_website(url, output_dir=None, delay=0.5, english_only=False, markdown_export=False):
+def download_website(url, output_dir=None, delay=0.5, english_only=False, markdown_export=False, page_only=False):
     """
     Download all URLs from a website.
     
@@ -178,6 +178,7 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
         delay: Time to wait between requests (in seconds) to avoid overloading the server
         english_only: If True, skip non-English translations of pages
         markdown_export: If True, create a single markdown file instead of HTML files
+        page_only: If True, download only the specified page and its resources without following links
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -223,6 +224,8 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
         print("English-only mode enabled: Non-English pages will be skipped")
     if markdown_export:
         print("Markdown export mode enabled: Creating a single markdown file")
+    if page_only:
+        print("Page-only mode enabled: Only downloading the specified page and its resources")
     
     while urls_to_visit:
         current_url = urls_to_visit.pop(0)
@@ -295,17 +298,32 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
                     file_path = os.path.join(output_dir, path)
                     os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 
-                # Extract all links in the page
-                for link in soup.find_all('a', href=True):
-                    href = link['href']
-                    absolute_url = urljoin(current_url, href)
-                    
-                    # Only follow links that belong to the same domain
-                    if is_valid_url(absolute_url, base_domain) and absolute_url not in visited_urls:
-                        # If in english_only mode, do a preliminary check on the URL
-                        if english_only and is_non_english_page(absolute_url):
-                            continue
-                        urls_to_visit.append(absolute_url)
+                # Extract all links in the page, unless we're in page-only mode
+                if not page_only:
+                    for link in soup.find_all('a', href=True):
+                        href = link['href']
+                        absolute_url = urljoin(current_url, href)
+                        
+                        # Only follow links that belong to the same domain
+                        if is_valid_url(absolute_url, base_domain) and absolute_url not in visited_urls:
+                            # If in english_only mode, do a preliminary check on the URL
+                            if english_only and is_non_english_page(absolute_url):
+                                continue
+                            urls_to_visit.append(absolute_url)
+                
+                # Find and download resources like CSS, JavaScript, and images
+                # even in page-only mode, we need to download these resources
+                resource_urls = []
+                for tag, attr in [('link', 'href'), ('script', 'src'), ('img', 'src')]:
+                    for element in soup.find_all(tag, attrs={attr: True}):
+                        resource_url = urljoin(current_url, element[attr])
+                        if is_valid_url(resource_url, base_domain) and resource_url not in visited_urls:
+                            resource_urls.append(resource_url)
+                
+                # Add resource URLs to visit, even in page-only mode
+                for resource_url in resource_urls:
+                    if resource_url not in visited_urls:
+                        urls_to_visit.append(resource_url)
                 
                 # Wait before next request to avoid overwhelming the server
                 time.sleep(delay)
@@ -352,6 +370,7 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
                     script_tag['src'] = convert_to_relative_url(path, absolute_url, base_domain, output_dir)
                 
                 # Save the modified HTML content
+                file_path = os.path.join(output_dir, path)
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(str(soup))
                 print(f"Saved: {file_path} with updated links")
@@ -407,6 +426,8 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
     print(f"All URLs saved to: {urls_file}")
     if not markdown_export:
         print(f"All links have been updated to use relative paths for local browsing.")
+        if page_only:
+            print(f"Page-only mode: Only downloaded the specified page and its resources.")
 
 def main():
     parser = argparse.ArgumentParser(description='Download all URLs from a website')
@@ -415,13 +436,14 @@ def main():
     parser.add_argument('--delay', type=float, default=0.5, help='Delay between requests in seconds (default: 0.5)')
     parser.add_argument('--english-only', action='store_true', help='Skip non-English translations of pages')
     parser.add_argument('--markdown', action='store_true', help='Create a single markdown file with inline images')
+    parser.add_argument('-p', '--page-only', action='store_true', help='Download only the specified page and its resources')
     
     args = parser.parse_args()
     
     if args.download:
         # Remove @ symbol if present (as shown in example)
         url = args.download.lstrip('@')
-        download_website(url, args.output, args.delay, args.english_only, args.markdown)
+        download_website(url, args.output, args.delay, args.english_only, args.markdown, args.page_only)
     else:
         parser.print_help()
 

@@ -40,7 +40,7 @@ pip install git+https://github.com/nvk/webdownloader.git
 ## Usage
 
 ```
-python webdownloader.py -d URL [-o OUTPUT_DIR] [--delay DELAY] [--english-only] [--markdown]
+python webdownloader.py -d URL [-o OUTPUT_DIR] [--delay DELAY] [--english-only] [--markdown] [-p, --page-only]
 ```
 
 ### Options:
@@ -50,6 +50,7 @@ python webdownloader.py -d URL [-o OUTPUT_DIR] [--delay DELAY] [--english-only] 
 - `--delay DELAY` : Delay between requests in seconds (default: 0.5)
 - `--english-only` : Skip non-English translations of pages
 - `--markdown` : Create a single markdown file with inline images
+- `-p, --page-only` : Download only the specified page and its resources without following links
 
 ### Examples:
 
@@ -68,9 +69,14 @@ Export as a single markdown file with images:
 python webdownloader.py -d example.com --markdown
 ```
 
+Download just a single page and its resources:
+```
+python webdownloader.py -d example.com/page1 -p
+```
+
 Combine options:
 ```
-python webdownloader.py -d example.com --english-only --markdown
+python webdownloader.py -d example.com/blog/post -p --markdown
 ```
 
 ## Features
@@ -101,6 +107,9 @@ Same as standard download, but skips pages in other languages. This is useful fo
 
 ### 3. Markdown Export
 Generates a single markdown file with all content, along with an 'images' folder containing the downloaded images. This provides a clean, readable format for content-focused websites, stripping away complex styling and JavaScript.
+
+### 4. Page-Only Mode
+Downloads only the specified page and its resources (CSS, JavaScript, images) without following any links to other pages. This is useful when you want just a specific article or page rather than an entire website.
 
 ## License
 
