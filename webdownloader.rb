@@ -1,3 +1,6 @@
+# Copyright (c) 2025 nvk
+# Licensed under the MIT License
+
 class Webdownloader < Formula
   include Language::Python::Virtualenv
 

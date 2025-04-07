@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025 nvk
+# Licensed under the MIT License
 
 import argparse
 import hashlib
