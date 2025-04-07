@@ -15,7 +15,7 @@ cp ../webdownloader.rb .
 
 # Commit and push
 git add webdownloader.rb
-git commit -m "Update webdownloader formula with fixed resource URLs"
+git commit -m "Update webdownloader formula with page-only mode feature"
 git push origin master
 
 # Cleanup
@@ -24,10 +24,12 @@ rm -rf homebrew-webdownloader
 
 echo ""
 echo "======================= SUCCESS! ======================="
-echo "Your Homebrew tap has been updated with the fixed formula."
+echo "Your Homebrew tap has been updated with the latest formula."
 echo ""
-echo "To install webdownloader using this tap, run:"
+echo "To install or upgrade webdownloader using this tap, run:"
 echo "  brew update"
 echo "  brew tap nvk/webdownloader"
 echo "  brew install webdownloader"
+echo "  # Or if already installed:"
+echo "  brew upgrade webdownloader"
 echo "=======================================================" 
