@@ -33,6 +33,15 @@ ENV/
 *.io/
 *.dev/
 
+# Package files
+*.tar.gz
+*.whl
+*.egg
+*.zip
+
+# Test output
+test_download/
+
 # Editors
 .idea/
 .vscode/
