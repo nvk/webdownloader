@@ -168,7 +168,192 @@ def html_to_markdown(html_content, base_url, img_dir=None):
     
     return markdown
 
-def download_website(url, output_dir=None, delay=0.5, english_only=False, markdown_export=False, page_only=False):
+def extract_image_ids(html_content, domain_patterns=None):
+    """Extract image IDs from HTML content for gallery downloading."""
+    if domain_patterns is None:
+        # Default patterns for REA Global (realtor.com)
+        domain_patterns = ['s1.rea.global']
+    
+    # Use BeautifulSoup to parse HTML
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Image IDs we've found with their extensions
+    image_ids = set()
+    
+    # Check for domain patterns in the HTML
+    for domain in domain_patterns:
+        if domain not in html_content:
+            continue
+            
+        # Look for image URLs in img tags
+        for img in soup.find_all('img'):
+            src = img.get('src', '')
+            if domain in src:
+                # Extract image ID from the URL
+                match = re.search(r'/([a-zA-Z0-9]+)\.(jpg|jpeg|png|webp)', src)
+                if match:
+                    image_id = match.group(1)
+                    ext = match.group(2)
+                    image_ids.add((image_id, ext))
+        
+        # Look for image URLs in srcset attributes
+        for tag in soup.find_all(['img', 'source']):
+            srcset = tag.get('srcset', '')
+            if domain in srcset:
+                for src_str in srcset.split(','):
+                    if domain in src_str:
+                        # Extract URL from srcset
+                        url_part = src_str.strip().split(' ')[0]
+                        match = re.search(r'/([a-zA-Z0-9]+)\.(jpg|jpeg|png|webp)', url_part)
+                        if match:
+                            image_id = match.group(1)
+                            ext = match.group(2)
+                            image_ids.add((image_id, ext))
+        
+        # Look for image URLs in JavaScript/JSON
+        script_pattern = fr'https?://{re.escape(domain)}/[^"\']+/([a-zA-Z0-9]+)\.(jpg|jpeg|png|webp)'
+        for script in soup.find_all('script'):
+            script_content = script.string
+            if script_content and domain in script_content:
+                matches = re.findall(script_pattern, script_content)
+                for match in matches:
+                    image_id = match[0]
+                    ext = match[1]
+                    image_ids.add((image_id, ext))
+        
+        # Also search the raw HTML for any missed IDs
+        raw_pattern = fr'https?://{re.escape(domain)}/[^"\']+/([a-zA-Z0-9]+)\.(jpg|jpeg|png|webp)'
+        matches = re.findall(raw_pattern, html_content)
+        for match in matches:
+            image_id = match[0]
+            ext = match[1]
+            image_ids.add((image_id, ext))
+        
+        # Search for specific image ID patterns in JSON data
+        json_patterns = [
+            r'"mediaUrl":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"',
+            r'"url":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"',
+            r'"src":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"',
+            r'"originalUrl":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"',
+            r'"hero":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"',
+            r'"large":"[^"]*/([\w\d]+)\.(jpg|jpeg|png|webp)[^"]*"'
+        ]
+        
+        for pattern in json_patterns:
+            matches = re.findall(pattern, html_content)
+            for match in matches:
+                image_id = match[0]
+                ext = match[1]
+                image_ids.add((image_id, ext))
+    
+    return list(image_ids)
+
+def generate_gallery_urls(image_ids, domain, country_code="cr"):
+    """Generate gallery image URLs from image IDs."""
+    # Define all possible sizes and formats
+    sizes = [
+        "raw",          # Original/raw image
+        "1200x888",     # Large
+        "1080x799",     # Medium-large
+        "828x612",      # Medium
+        "750x555",      # Medium-small
+        "640x473",      # Small
+        "384x284",      # Smaller
+        "256x189"       # Thumbnail
+    ]
+    
+    # Generate URLs with different sizes/formats
+    urls = []
+    
+    # Default pattern for REA Global (realtor.com)
+    if domain == 's1.rea.global':
+        base_url = f"https://{domain}/img/"
+        for image_id, ext in image_ids:
+            for size in sizes:
+                if size == "raw":
+                    # Raw format
+                    url = f"{base_url}{size}/realtor_global/{country_code}/{image_id}.{ext}"
+                else:
+                    # Sized format with -prop suffix
+                    url = f"{base_url}{size}-prop/realtor_global/{country_code}/{image_id}.{ext}"
+                urls.append(url)
+    
+    return urls
+
+def download_gallery_images(urls, output_dir, max_per_image=1):
+    """
+    Download gallery images from a list of URLs.
+    Args:
+        urls: List of image URLs to download
+        output_dir: Directory to save images
+        max_per_image: Maximum number of sizes to download per unique image ID
+    """
+    if not urls:
+        return []
+    
+    # Create images directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Set user agent to avoid being blocked
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.realtor.com/'
+    }
+    
+    # Group URLs by image ID to avoid downloading multiple sizes of the same image
+    image_id_pattern = r'/([a-zA-Z0-9]+)\.(jpg|jpeg|png|webp)'
+    image_id_to_urls = {}
+    
+    for url in urls:
+        match = re.search(image_id_pattern, url)
+        if match:
+            image_id = match.group(1)
+            if image_id not in image_id_to_urls:
+                image_id_to_urls[image_id] = []
+            image_id_to_urls[image_id].append(url)
+    
+    # Sort URLs for each image ID by preference (raw first, then by size)
+    for image_id, image_urls in image_id_to_urls.items():
+        image_urls.sort(key=lambda u: (0 if "/raw/" in u else 1, 
+                                      0 if "1200x888" in u else 
+                                      1 if "1080x799" in u else 
+                                      2 if "828x612" in u else 
+                                      3))
+    
+    # Download images
+    downloaded_images = []
+    downloaded_ids = set()
+    
+    for image_id, image_urls in image_id_to_urls.items():
+        # Only download up to max_per_image sizes of each image
+        for i, url in enumerate(image_urls[:max_per_image]):
+            try:
+                # Extract size/format from URL for filename
+                size_match = re.search(r'/(?:raw|(\d+x\d+)-prop)/', url)
+                size = size_match.group(1) if size_match and size_match.group(1) else "raw"
+                
+                # Create filename
+                filename = f"gallery_{image_id}_{size}.{url.split('.')[-1]}"
+                filepath = os.path.join(output_dir, filename)
+                
+                # Download the image
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    with open(filepath, 'wb') as f:
+                        f.write(response.content)
+                    print(f"Downloaded gallery image: {filename}")
+                    downloaded_images.append(filepath)
+                    downloaded_ids.add(image_id)
+                else:
+                    print(f"Failed to download: {url} (Status: {response.status_code})")
+            except Exception as e:
+                print(f"Error downloading {url}: {e}")
+    
+    print(f"Downloaded {len(downloaded_images)} gallery images ({len(downloaded_ids)} unique images)")
+    return downloaded_images
+
+def download_website(url, output_dir=None, delay=0.5, english_only=False, markdown_export=False, page_only=False, gallery_mode=False, country_code="cr"):
     """
     Download all URLs from a website.
     
@@ -179,6 +364,8 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
         english_only: If True, skip non-English translations of pages
         markdown_export: If True, create a single markdown file instead of HTML files
         page_only: If True, download only the specified page and its resources without following links
+        gallery_mode: If True, attempt to extract and download high-quality gallery images
+        country_code: Country code for gallery image URLs (default: cr for Costa Rica)
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -199,6 +386,13 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
         os.makedirs(img_dir, exist_ok=True)
         print(f"Created images directory: {img_dir}")
     
+    # Create gallery directory if in gallery mode
+    gallery_dir = None
+    if gallery_mode:
+        gallery_dir = os.path.join(output_dir, 'gallery')
+        os.makedirs(gallery_dir, exist_ok=True)
+        print(f"Created gallery directory: {gallery_dir}")
+    
     # Keep track of visited URLs to avoid duplicates
     visited_urls = set()
     urls_to_visit = [url]
@@ -210,12 +404,16 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
     # For markdown export, keep track of content
     markdown_content = []
     
+    # For gallery mode, keep track of image IDs
+    gallery_image_ids = []
+    
     # Statistics
     stats = {
         'downloaded': 0,
         'skipped_non_english': 0,
         'errors': 0,
-        'images_downloaded': 0
+        'images_downloaded': 0,
+        'gallery_images': 0
     }
     
     print(f"Starting download of {url}")
@@ -226,6 +424,8 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
         print("Markdown export mode enabled: Creating a single markdown file")
     if page_only:
         print("Page-only mode enabled: Only downloading the specified page and its resources")
+    if gallery_mode:
+        print("Gallery mode enabled: Attempting to extract and download gallery images")
     
     while urls_to_visit:
         current_url = urls_to_visit.pop(0)
@@ -270,6 +470,17 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
                 
                 # Store URL to local path mapping
                 url_to_local_path[current_url] = path
+                
+                # If in gallery mode, extract image IDs
+                if gallery_mode:
+                    # Check if this is likely a gallery page (realtor.com or similar)
+                    domain = urlparse(current_url).netloc
+                    if 'realtor.com' in domain or any(pattern in response.text for pattern in ['s1.rea.global']):
+                        print("Detected possible gallery page, extracting image IDs...")
+                        ids = extract_image_ids(response.text)
+                        if ids:
+                            gallery_image_ids.extend(ids)
+                            print(f"Found {len(ids)} gallery image IDs")
                 
                 # For markdown export, convert HTML to markdown and add to content
                 if markdown_export:
@@ -380,6 +591,16 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
                 print(f"Error updating links in {file_path}: {e}")
                 stats['errors'] += 1
     
+    # Process gallery images if in gallery mode
+    if gallery_mode and gallery_image_ids:
+        print("\nDownloading gallery images...")
+        # Generate gallery image URLs (currently only supports REA Global)
+        gallery_urls = generate_gallery_urls(gallery_image_ids, 's1.rea.global', country_code)
+        if gallery_urls:
+            # Download gallery images
+            downloaded_gallery_images = download_gallery_images(gallery_urls, gallery_dir)
+            stats['gallery_images'] = len(downloaded_gallery_images)
+    
     # Save all discovered URLs to a text file
     urls_file = os.path.join(output_dir, 'all_urls.txt')
     with open(urls_file, 'w', encoding='utf-8') as f:
@@ -422,6 +643,8 @@ def download_website(url, output_dir=None, delay=0.5, english_only=False, markdo
     print(f"Pages downloaded: {stats['downloaded']}")
     if english_only:
         print(f"Non-English pages skipped: {stats['skipped_non_english']}")
+    if gallery_mode:
+        print(f"Gallery images downloaded: {stats['gallery_images']}")
     print(f"Errors encountered: {stats['errors']}")
     print(f"All URLs saved to: {urls_file}")
     if not markdown_export:
@@ -437,13 +660,15 @@ def main():
     parser.add_argument('--english-only', action='store_true', help='Skip non-English translations of pages')
     parser.add_argument('--markdown', action='store_true', help='Create a single markdown file with inline images')
     parser.add_argument('-p', '--page-only', action='store_true', help='Download only the specified page and its resources')
+    parser.add_argument('-g', '--gallery-mode', action='store_true', help='Extract and download gallery images (works with realtor.com)')
+    parser.add_argument('-c', '--country-code', default='cr', help='Country code for gallery images (default: cr)')
     
     args = parser.parse_args()
     
     if args.download:
         # Remove @ symbol if present (as shown in example)
         url = args.download.lstrip('@')
-        download_website(url, args.output, args.delay, args.english_only, args.markdown, args.page_only)
+        download_website(url, args.output, args.delay, args.english_only, args.markdown, args.page_only, args.gallery_mode, args.country_code)
     else:
         parser.print_help()
 
