@@ -3,7 +3,7 @@
 
 # Calculate SHA256 of the tarball
 echo "Calculating SHA256 of the tarball..."
-curl -sL "https://github.com/nvk/webdownloader/archive/refs/tags/v1.0.1.tar.gz" | shasum -a 256 | cut -d ' ' -f 1 > sha256.txt
+curl -sL "https://github.com/nvk/webdownloader/archive/refs/tags/v1.0.2.tar.gz" | shasum -a 256 | cut -d ' ' -f 1 > sha256.txt
 ACTUAL_SHA256=$(cat sha256.txt)
 echo "Actual SHA256: $ACTUAL_SHA256"
 
