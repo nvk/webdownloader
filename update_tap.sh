@@ -15,18 +15,14 @@ echo "Cloning the tap repository..."
 git clone git@github.com:nvk/homebrew-webdownloader.git
 cd homebrew-webdownloader
 
-# Copy the formula file
-echo "Copying formula file..."
+# Copy the formula file without modifying it further
+echo "Copying formula file without modifications..."
 cp ../webdownloader.rb .
-
-# Update the SHA256 in the formula
-echo "Updating SHA256 in the formula..."
-sed -i '' "s/sha256 \"[0-9a-f]*\"/sha256 \"$ACTUAL_SHA256\"/" webdownloader.rb
 
 # Commit and push
 git add webdownloader.rb
-git commit -m "Update webdownloader formula with correct SHA256"
-git push origin master
+git commit -m "Update webdownloader formula" || echo "No changes to commit"
+git push origin master || echo "No changes to push"
 
 # Cleanup
 cd ..
@@ -35,7 +31,7 @@ rm sha256.txt
 
 echo ""
 echo "======================= SUCCESS! ======================="
-echo "Your Homebrew tap has been updated with the correct SHA256."
+echo "Your Homebrew tap has been updated."
 echo ""
 echo "To install or upgrade webdownloader using this tap, run:"
 echo "  brew update"
