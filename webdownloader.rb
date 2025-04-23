@@ -52,12 +52,33 @@ class Webdownloader < Formula
     sha256 "fc53893b3da2c33de295667a0e19f078c14bf86544af307354de5fcf12a3f30d"
   end
 
-  # Include only the essential dependencies
-  # Requests has its own dependencies (certifi, charset-normalizer, idna, urllib3)
-  # BeautifulSoup4 depends on soupsieve
-
   def install
-    virtualenv_install_with_resources
+    # Create a simple venv manually instead of using virtualenv_install_with_resources
+    venv = prefix/"libexec"
+    venv_bin = venv/"bin"
+    
+    system "python3", "-m", "venv", venv.to_s
+    
+    # Install all resources into the virtualenv
+    resources.each do |r|
+      r.stage do
+        system venv_bin/"pip", "install", "."
+      end
+    end
+    
+    # Install the script directly
+    bin_path = venv_bin/"webdownloader"
+    bin_path.write <<~EOS
+      #!/bin/sh
+      "#{venv_bin}/python" "#{prefix}/webdownloader.py" "$@"
+    EOS
+    bin_path.chmod 0755
+    
+    # Copy the main script
+    prefix.install "webdownloader.py"
+    
+    # Create a symlink in the bin directory
+    bin.install_symlink bin_path
   end
 
   test do
