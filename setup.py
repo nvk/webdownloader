@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="webdownloader",
-    version="1.0.1",
+    version="1.0.2",
     author="nvk",
     author_email="",
     description="A command-line tool to download websites for offline use with multiple output options",

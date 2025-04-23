@@ -6,7 +6,7 @@ class Webdownloader < Formula
 
   desc "Command-line tool to download websites for offline use with multiple output options"
   homepage "https://github.com/nvk/webdownloader"
-  url "https://github.com/nvk/webdownloader/archive/refs/tags/v1.0.1.tar.gz"
+  url "https://github.com/nvk/webdownloader/archive/refs/tags/v1.0.2.tar.gz"
   sha256 "62d28e990e7979bc91de3139501be56801df74929968d0102d830f32e4a91db6"
   license "MIT"
 
