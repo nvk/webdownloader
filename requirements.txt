@@ -1,3 +1,6 @@
-requests==2.31.0
-beautifulsoup4==4.12.2
-html2text==2025.4.15 
+requests==2.34.2
+beautifulsoup4==4.14.3
+# Optional dependency used by --markdown.
+html2text==2025.4.15
+# Optional dependency used by SOCKS proxy URLs such as socks5h://127.0.0.1:1080.
+PySocks==1.7.1
